@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Itinerary Builder</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- jsPDF and html2canvas for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for better look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: #60a5fa;
+            border-radius: 4px;
+        }
+        /* Hide the PDF content div initially and style it for A4 print aspect ratio */
+        #pdf-content {
+            width: 210mm; /* A4 width */
+            min-height: 297mm; /* A4 height */
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background-color: white;
+            padding: 30px;
+            margin: 0 auto;
+        }
+        /* Style for the PDF layout (hidden on screen, but visible to html2canvas) */
+        .pdf-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .pdf-header {
+            background-color: #1d4ed8;
+            color: white;
+            padding: 20px;
+            margin: -30px -30px 20px -30px;
+            border-radius: 5px 5px 0 0;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .activity-box {
+            border-left: 3px solid #60a5fa;
+            padding-left: 10px;
+            margin-bottom: 10px;
+            background-color: #f3f4f6;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-blue-700">Vigovia Plan.pack.go</h1>
+            <p class="text-gray-500">Input all trip details and generate a professional PDF.</p>
+        </header>
+
+        <!-- New Personalized Itinerary Box -->
+        <div class="mb-8 p-4 bg-blue-600 text-white rounded-xl shadow-lg flex items-center justify-between transition-all duration-300 transform hover:shadow-2xl md:p-6">
+            <div class="flex items-center">
+                <i data-lucide="plane" class="w-8 h-8 mr-4 text-blue-300"></i>
+                <h2 class="text-xl md:text-2xl font-bold">
+                    Hi Rahul! Singapore Itinerary: <span class="font-light text-blue-200">4 Days / 3 Nights</span>
+                </h2>
+            </div>
+            <i data-lucide="calendar-check" class="w-6 h-6 text-blue-200 hidden sm:block"></i>
+        </div>
+
+        <main class="grid lg:grid-cols-3 gap-8">
+            <!-- Input Form Area (2/3 width on desktop) -->
+            <div id="input-form" class="lg:col-span-2 space-y-8 p-6 bg-white rounded-xl shadow-lg border border-gray-100">
+
+                <!-- 1. Tour Overview -->
+                <section class="border-b pb-4">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4 flex items-center"><i data-lucide="map-pin" class="w-5 h-5 mr-2 text-blue-500"></i>Tour Overview</h2>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <input type="text" id="tripTitle" placeholder="Trip Title (e.g., European Grand Tour)" class="p-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500" data-key="tripTitle" oninput="updateState(event)">
+                        <input type="text" id="totalDuration" placeholder="Total Duration (e.g., 10 Days / 9 Nights)" class="p-3 border rounded-lg" data-key="totalDuration" oninput="updateState(event)">
+                        <input type="number" id="numTravelers" placeholder="Number of Travelers" class="p-3 border rounded-lg" data-key="numTravelers" oninput="updateState(event)">
+                        <input type="date" id="departureDate" placeholder="Departure Date" class="p-3 border rounded-lg" data-key="departureDate" oninput="updateState(event)">
+                        <input type="text" id="arrivalDetails" placeholder="Arrival Details (City, Time, Flight No.)" class="p-3 border rounded-lg col-span-2" data-key="arrivalDetails" oninput="updateState(event)">
+                        <input type="text" id="departureDetails" placeholder="Departure Details (City, Time, Flight No.)" class="p-3 border rounded-lg col-span-2" data-key="departureDetails" oninput="updateState(event)">
+                    </div>
+                </section>
+
+                <!-- 2. Accommodation -->
+                <section class="border-b pb-4">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4 flex items-center"><i data-lucide="hotel" class="w-5 h-5 mr-2 text-blue-500"></i>Accommodation Details</h2>
+                    <div id="hotel-inputs" class="space-y-3">
+                        <!-- Default hotel input -->
+                        <div class="grid md:grid-cols-6 gap-3 hotel-row" data-index="0">
+                            <input type="text" placeholder="Hotel Name" class="p-3 border rounded-lg col-span-6 md:col-span-2" data-key="hotelName" oninput="updateHotelState(event, 0)">
+                            <input type="text" placeholder="City" class="p-3 border rounded-lg col-span-3 md:col-span-1" data-key="city" oninput="updateHotelState(event, 0)">
+                            <input type="date" placeholder="Check-in" class="p-3 border rounded-lg col-span-3 md:col-span-1" data-key="checkIn" oninput="updateHotelState(event, 0)">
+                            <input type="date" placeholder="Check-out" class="p-3 border rounded-lg col-span-3 md:col-span-1" data-key="checkOut" oninput="updateHotelState(event, 0)">
+                            <input type="number" placeholder="Nights" class="p-3 border rounded-lg col-span-3 md:col-span-1" data-key="nights" oninput="updateHotelState(event, 0)">
+                        </div>
+                    </div>
+                    <button onclick="addHotel()" class="mt-4 text-blue-500 hover:text-blue-600 font-medium flex items-center"><i data-lucide="plus" class="w-4 h-4 mr-1"></i>Add Hotel</button>
+                </section>
+
+
+                <!-- 3. Daily Itinerary -->
+                <section class="border-b pb-4">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4 flex items-center"><i data-lucide="calendar" class="w-5 h-5 mr-2 text-blue-500"></i>Daily Itinerary</h2>
+                    <div id="daily-itinerary-inputs" class="space-y-6">
+                        <!-- Daily itinerary rows generated by JS -->
+                    </div>
+                    <div class="flex space-x-4 mt-6">
+                        <button onclick="addDay()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition flex items-center"><i data-lucide="plus" class="w-4 h-4 mr-1"></i>Add Day</button>
+                        <button onclick="removeDay()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition flex items-center" id="removeDayBtn" disabled><i data-lucide="minus" class="w-4 h-4 mr-1"></i>Remove Day</button>
+                    </div>
+                </section>
+
+                <!-- 4. Inclusions/Exclusions -->
+                <section class="border-b pb-4">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4 flex items-center"><i data-lucide="check-square" class="w-5 h-5 mr-2 text-blue-500"></i>Inclusions & Exclusions</h2>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <textarea id="inclusions" rows="5" placeholder="List services included (e.g., International flights, 4-star hotels, Daily breakfast)" class="p-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500" data-key="inclusions" oninput="updateState(event)"></textarea>
+                        <textarea id="exclusions" rows="5" placeholder="List services NOT included (e.g., Travel insurance, Personal expenses, Visa fees)" class="p-3 border rounded-lg focus:ring-blue-500 focus:border-blue-500" data-key="exclusions" oninput="updateState(event)"></textarea>
+                    </div>
+                </section>
+
+                <!-- 5. Payment Plan -->
+                <section>
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4 flex items-center"><i data-lucide="credit-card" class="w-5 h-5 mr-2 text-blue-500"></i>Payment Plan</h2>
+                    <div id="payment-installments" class="space-y-3">
+                        <!-- Default installment input -->
+                        <div class="grid grid-cols-12 gap-3 installment-row" data-index="0">
+                            <input type="text" placeholder="Installment Name (e.g., Deposit)" class="p-3 border rounded-lg col-span-6 md:col-span-5" data-key="name" oninput="updateInstallmentState(event, 0)">
+                            <input type="number" placeholder="Amount (USD)" class="p-3 border rounded-lg col-span-3 md:col-span-3" data-key="amount" oninput="updateInstallmentState(event, 0)">
+                            <input type="date" placeholder="Due Date" class="p-3 border rounded-lg col-span-3 md:col-span-3" data-key="dueDate" oninput="updateInstallmentState(event, 0)">
+                            <button onclick="removeInstallment(0)" class="col-span-1 flex justify-center items-center text-red-500 hover:text-red-700" title="Remove"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+                        </div>
+                    </div>
+                    <div class="flex space-x-4 mt-4">
+                        <button onclick="addInstallment()" class="text-blue-500 hover:text-blue-600 font-medium flex items-center"><i data-lucide="plus" class="w-4 h-4 mr-1"></i>Add Installment</button>
+                        <input type="number" id="totalPrice" placeholder="Total Tour Price (Optional)" class="p-2 border rounded-lg w-full max-w-xs" data-key="totalPrice" oninput="updateState(event)">
+                    </div>
+                </section>
+
+                <!-- Generate Button -->
+                <div class="pt-8">
+                    <button onclick="generatePDF()" class="w-full py-3 bg-blue-600 text-white text-lg font-semibold rounded-xl shadow-md hover:bg-blue-700 transition duration-300 transform hover:scale-[1.01] flex items-center justify-center">
+                        <i data-lucide="file-text" class="w-6 h-6 mr-2"></i>
+                        Generate Downloadable PDF Itinerary
+                    </button>
+                </div>
+            </div>
+
+            <!-- Instructions/Notes Area (1/3 width on desktop) -->
+            <div class="lg:col-span-1 p-6 bg-yellow-50 rounded-xl shadow-inner border border-yellow-200 h-fit sticky top-8">
+                <h3 class="text-lg font-bold text-yellow-800 mb-4 flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2"></i>How it Works</h3>
+                <ol class="list-decimal list-inside space-y-3 text-sm text-gray-700">
+                    <li>Fill out all the required details on the left.</li>
+                    <li>Use **Add Day** to expand the itinerary length.</li>
+                    <li>Click **Generate PDF** at the bottom.</li>
+                    <li>The system will convert the data into a professional, styled itinerary document (matching the Figma concept) and prompt you to download it.</li>
+                    <li>*Note: For the best PDF result, try to keep activity descriptions concise.*</li>
+                </ol>
+            </div>
+        </main>
+    </div>
+
+    <!-- PDF Template Target (Hidden and styled for A4 print) -->
+    <div id="pdf-content" class="hidden">
+        <!-- Content will be injected here before PDF generation -->
+    </div>
+
+    <script>
+        const { jsPDF } = window.jspdf;
+        const dailyItineraryContainer = document.getElementById('daily-itinerary-inputs');
+        const hotelInputsContainer = document.getElementById('hotel-inputs');
+        const paymentContainer = document.getElementById('payment-installments');
+
+        // State initialization with minimum required structure
+        const state = {
+            tripTitle: "Your Grand Tour Itinerary",
+            totalDuration: "7 Days / 6 Nights",
+            numTravelers: "2",
+            departureDate: new Date().toISOString().substring(0, 10),
+            arrivalDetails: "Arrive at JFK, Flight BA247, 10:00 AM",
+            departureDetails: "Depart from LAX, Flight UA500, 7:00 PM",
+            inclusions: "- International Flights\n- 4-Star Hotel Accommodation\n- Daily Breakfast",
+            exclusions: "- Travel Insurance\n- Personal Expenses\n- Optional Tours",
+            totalPrice: "",
+            hotels: [{ hotelName: "", city: "", checkIn: "", checkOut: "", nights: 0 }],
+            dailyPlans: [
+                { day: 1, transport: "", morning: "", afternoon: "", evening: "" },
+                { day: 2, transport: "", morning: "", afternoon: "", evening: "" },
+                { day: 3, transport: "", morning: "", afternoon: "", evening: "" },
+            ],
+            installments: [
+                { name: "Deposit", amount: 500, dueDate: new Date().toISOString().substring(0, 10) }
+            ]
+        };
+
+        // --- Core State Management Functions ---
+
+        /** Updates non-array properties in the state object */
+        function updateState(event) {
+            const key = event.target.getAttribute('data-key');
+            state[key] = event.target.value;
+        }
+
+        /** Updates hotel array properties */
+        function updateHotelState(event, index) {
+            const key = event.target.getAttribute('data-key');
+            state.hotels[index][key] = event.target.value;
+        }
+
+        /** Updates daily plan array properties */
+        function updateDailyPlanState(event, dayIndex) {
+            const key = event.target.getAttribute('data-key');
+            state.dailyPlans[dayIndex][key] = event.target.value;
+        }
+
+        /** Updates installment array properties */
+        function updateInstallmentState(event, index) {
+            const key = event.target.getAttribute('data-key');
+            state.installments[index][key] = event.target.value;
+        }
+
+        // --- Dynamic UI Management Functions ---
+
+        /** Renders all hotel input rows */
+        function renderHotels() {
+            hotelInputsContainer.innerHTML = state.hotels.map((hotel, index) => `
+                <div class="grid md:grid-cols-6 gap-3 hotel-row items-center" data-index="${index}">
+                    <input type="text" placeholder="Hotel Name" class="p-3 border rounded-lg col-span-6 md:col-span-2" data-key="hotelName" value="${hotel.hotelName}" oninput="updateHotelState(event, ${index})">
+                    <input type="text" placeholder="City" class="p-3 border rounded-lg col-span-3 md:col-span-1" data-key="city" value="${hotel.city}" oninput="updateHotelState(event, ${index})">
+                    <input type="date" placeholder="Check-in" class="p-3 border rounded-lg col-span-3 md:col-span-1" data-key="checkIn" value="${hotel.checkIn}" oninput="updateHotelState(event, ${index})">
+                    <input type="date" placeholder="Check-out" class="p-3 border rounded-lg col-span-3 md:col-span-1" data-key="checkOut" value="${hotel.checkOut}" oninput="updateHotelState(event, ${index})">
+                    <div class="flex items-center space-x-2 col-span-3 md:col-span-1">
+                        <input type="number" placeholder="Nights" class="p-3 border rounded-lg w-full" data-key="nights" value="${hotel.nights}" oninput="updateHotelState(event, ${index})">
+                        <button onclick="removeHotel(${index})" class="text-red-500 hover:text-red-700 w-8 h-8 flex-shrink-0" title="Remove Hotel"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        /** Adds a new hotel row */
+        function addHotel() {
+            state.hotels.push({ hotelName: "", city: "", checkIn: "", checkOut: "", nights: 0 });
+            renderHotels();
+        }
+
+        /** Removes a hotel row */
+        function removeHotel(index) {
+            if (state.hotels.length > 1) {
+                state.hotels.splice(index, 1);
+                renderHotels();
+            }
+        }
+
+
+        /** Renders all daily itinerary input rows */
+        function renderDailyItinerary() {
+            dailyItineraryContainer.innerHTML = state.dailyPlans.map((plan, index) => `
+                <div class="p-4 border border-gray-200 rounded-lg bg-gray-50 day-card" data-day="${plan.day}">
+                    <h3 class="font-bold text-lg text-gray-800 mb-3">Day ${plan.day}</h3>
+                    <div class="space-y-3">
+                        <input type="text" placeholder="Flights/Transfers (e.g., Transfer to Hotel, Flight to Rome)" class="w-full p-2 border rounded-lg bg-white" data-key="transport" value="${plan.transport}" oninput="updateDailyPlanState(event, ${index})">
+                        <textarea rows="2" placeholder="Morning Activity / Sightseeing" class="w-full p-2 border rounded-lg" data-key="morning" oninput="updateDailyPlanState(event, ${index})">${plan.morning}</textarea>
+                        <textarea rows="2" placeholder="Afternoon Activity / Sightseeing" class="w-full p-2 border rounded-lg" data-key="afternoon" oninput="updateDailyPlanState(event, ${index})">${plan.afternoon}</textarea>
+                        <textarea rows="2" placeholder="Evening Activity / Dinner/Show" class="w-full p-2 border rounded-lg" data-key="evening" oninput="updateDailyPlanState(event, ${index})">${plan.evening}</textarea>
+                    </div>
+                </div>
+            `).join('');
+            checkDayButtons();
+        }
+
+        /** Adds a new day to the itinerary */
+        function addDay() {
+            const newDay = state.dailyPlans.length + 1;
+            state.dailyPlans.push({ day: newDay, transport: "", morning: "", afternoon: "", evening: "" });
+            renderDailyItinerary();
+        }
+
+        /** Removes the last day from the itinerary */
+        function removeDay() {
+            if (state.dailyPlans.length > 1) {
+                state.dailyPlans.pop();
+                renderDailyItinerary();
+            }
+        }
+
+        /** Enables/Disables the remove day button */
+        function checkDayButtons() {
+            const removeBtn = document.getElementById('removeDayBtn');
+            removeBtn.disabled = state.dailyPlans.length <= 1;
+            removeBtn.classList.toggle('opacity-50', state.dailyPlans.length <= 1);
+        }
+
+        /** Renders all payment installment input rows */
+        function renderInstallments() {
+            paymentContainer.innerHTML = state.installments.map((inst, index) => `
+                <div class="grid grid-cols-12 gap-3 installment-row items-center" data-index="${index}">
+                    <input type="text" placeholder="Installment Name" class="p-3 border rounded-lg col-span-6 md:col-span-5" data-key="name" value="${inst.name}" oninput="updateInstallmentState(event, ${index})">
+                    <input type="number" placeholder="Amount (USD)" class="p-3 border rounded-lg col-span-3 md:col-span-3" data-key="amount" value="${inst.amount}" oninput="updateInstallmentState(event, ${index})">
+                    <input type="date" placeholder="Due Date" class="p-3 border rounded-lg col-span-3 md:col-span-3" data-key="dueDate" value="${inst.dueDate}" oninput="updateInstallmentState(event, ${index})">
+                    <button onclick="removeInstallment(${index})" class="col-span-1 flex justify-center items-center text-red-500 hover:text-red-700" title="Remove"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        /** Adds a new payment installment row */
+        function addInstallment() {
+            state.installments.push({ name: "", amount: 0, dueDate: "" });
+            renderInstallments();
+        }
+
+        /** Removes a payment installment row */
+        function removeInstallment(index) {
+            state.installments.splice(index, 1);
+            renderInstallments();
+        }
+
+
+        // --- PDF Generation Logic ---
+
+        /** Converts the state data into the styled HTML template for PDF conversion */
+        function buildPdfContent() {
+            const pdfContent = document.getElementById('pdf-content');
+
+            // Helper to convert newline text to list items for display
+            const formatList = (text) => {
+                if (!text) return '<p class="text-gray-400 italic">No details provided.</p>';
+                return '<ul>' + text.split('\n').map(line => `<li class="mb-1 flex items-center"><i data-lucide="chevron-right" class="w-4 h-4 mr-2 text-blue-500 flex-shrink-0"></i><span>${line.trim()}</span></li>`).join('') + '</ul>';
+            };
+
+            const html = `
+                <!-- ITINERARY HEADER -->
+                <div class="pdf-header rounded-xl shadow-md">
+                    <div class="text-3xl">${state.tripTitle || 'Untitled Tour Itinerary'}</div>
+                    <div class="text-sm font-light mt-1">${state.totalDuration || 'Duration TBD'} | Travelers: ${state.numTravelers || 'N/A'}</div>
+                </div>
+
+                <!-- 1. OVERVIEW & DATES -->
+                <div class="pdf-section pt-3">
+                    <h3 class="text-xl font-semibold text-gray-800 border-b border-blue-100 pb-1 mb-3 flex items-center"><i data-lucide="calendar-check" class="w-5 h-5 mr-2 text-blue-500"></i>Trip Details</h3>
+                    <div class="grid grid-cols-2 text-sm">
+                        <div><strong class="text-blue-600">Start Date:</strong> ${state.departureDate || 'N/A'}</div>
+                        <div><strong class="text-blue-600">Total Duration:</strong> ${state.totalDuration || 'N/A'}</div>
+                        <div class="col-span-2 mt-2"><strong class="text-blue-600">Arrival Details:</strong> ${state.arrivalDetails || 'N/A'}</div>
+                        <div class="col-span-2"><strong class="text-blue-600">Departure Details:</strong> ${state.departureDetails || 'N/A'}</div>
+                    </div>
+                </div>
+
+                <!-- 2. ACCOMMODATION -->
+                <div class="pdf-section">
+                    <h3 class="text-xl font-semibold text-gray-800 border-b border-blue-100 pb-1 mb-3 flex items-center"><i data-lucide="hotel" class="w-5 h-5 mr-2 text-blue-500"></i>Accommodation</h3>
+                    <table class="w-full text-left text-sm border-collapse">
+                        <thead>
+                            <tr class="bg-blue-50 text-blue-800">
+                                <th class="p-2 border border-blue-100">Hotel Name</th>
+                                <th class="p-2 border border-blue-100">City</th>
+                                <th class="p-2 border border-blue-100">Check-in</th>
+                                <th class="p-2 border border-blue-100">Check-out</th>
+                                <th class="p-2 border border-blue-100">Nights</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${state.hotels.filter(h => h.hotelName).map(h => `
+                                <tr>
+                                    <td class="p-2 border border-gray-200">${h.hotelName}</td>
+                                    <td class="p-2 border border-gray-200">${h.city}</td>
+                                    <td class="p-2 border border-gray-200">${h.checkIn}</td>
+                                    <td class="p-2 border border-gray-200">${h.checkOut}</td>
+                                    <td class="p-2 border border-gray-200">${h.nights}</td>
+                                </tr>
+                            `).join('') || '<tr><td colspan="5" class="p-3 text-center text-gray-500 italic">No accommodation details entered.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 3. DAILY ITINERARY -->
+                <div class="pdf-section">
+                    <h3 class="text-xl font-semibold text-gray-800 border-b border-blue-100 pb-1 mb-3 flex items-center"><i data-lucide="map" class="w-5 h-5 mr-2 text-blue-500"></i>Detailed Daily Plan</h3>
+                    ${state.dailyPlans.map(plan => `
+                        <div class="mb-4 p-4 border rounded-lg shadow-sm bg-white">
+                            <h4 class="text-lg font-bold text-blue-700 mb-2 border-b-2 border-blue-100 pb-1">Day ${plan.day}</h4>
+                            ${plan.transport ? `<p class="mb-2 text-sm italic font-medium text-gray-700 flex items-center"><i data-lucide="plane" class="w-4 h-4 mr-2 text-green-500"></i><span class="font-semibold">Transfer/Flight:</span> ${plan.transport}</p>` : ''}
+                            <div class="grid grid-cols-3 gap-2 text-sm">
+                                <div class="activity-box"><strong>Morning:</strong> ${plan.morning || 'Leisure / TBD'}</div>
+                                <div class="activity-box"><strong>Afternoon:</strong> ${plan.afternoon || 'Leisure / TBD'}</div>
+                                <div class="activity-box"><strong>Evening:</strong> ${plan.evening || 'Leisure / TBD'}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <!-- 4. INCLUSIONS & EXCLUSIONS -->
+                <div class="pdf-section grid grid-cols-2 gap-4">
+                    <div>
+                        <h4 class="text-lg font-semibold text-green-700 mb-2 flex items-center"><i data-lucide="thumbs-up" class="w-5 h-5 mr-2 text-green-500"></i>Inclusions</h4>
+                        ${formatList(state.inclusions)}
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-semibold text-red-700 mb-2 flex items-center"><i data-lucide="thumbs-down" class="w-5 h-5 mr-2 text-red-500"></i>Exclusions</h4>
+                        ${formatList(state.exclusions)}
+                    </div>
+                </div>
+
+                <!-- 5. PAYMENT PLAN -->
+                <div>
+                    <h3 class="text-xl font-semibold text-gray-800 border-b border-blue-100 pb-1 mb-3 flex items-center"><i data-lucide="credit-card" class="w-5 h-5 mr-2 text-blue-500"></i>Payment Schedule</h3>
+                    <table class="w-full text-left text-sm border-collapse">
+                        <thead>
+                            <tr class="bg-blue-50 text-blue-800">
+                                <th class="p-2 border border-blue-100">Installment Name</th>
+                                <th class="p-2 border border-blue-100">Due Date</th>
+                                <th class="p-2 border border-blue-100">Amount (USD)</th>
+                                <th class="p-2 border border-blue-100">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${state.installments.filter(i => i.name).map(i => `
+                                <tr>
+                                    <td class="p-2 border border-gray-200">${i.name}</td>
+                                    <td class="p-2 border border-gray-200">${i.dueDate}</td>
+                                    <td class="p-2 border border-gray-200">$${i.amount.toLocaleString('en-US')}</td>
+                                    <td class="p-2 border border-gray-200 text-yellow-600 font-medium">Pending</td>
+                                </tr>
+                            `).join('') || '<tr><td colspan="4" class="p-3 text-center text-gray-500 italic">No payment plan entered.</td></tr>'}
+                        </tbody>
+                        ${state.totalPrice ? `
+                            <tfoot>
+                                <tr class="bg-blue-100 font-bold text-base">
+                                    <td colspan="3" class="p-2 border border-blue-200 text-right">Total Tour Price:</td>
+                                    <td class="p-2 border border-blue-200">$${Number(state.totalPrice).toLocaleString('en-US')}</td>
+                                </tr>
+                            </tfoot>
+                        ` : ''}
+                    </table>
+                </div>
+
+                <div class="text-center mt-10 text-xs text-gray-500 border-t pt-4">
+                    Generated by Gemini Itinerary Builder - Date: ${new Date().toLocaleDateString()}
+                </div>
+            `;
+            pdfContent.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        /** Main function to generate and download the PDF */
+        async function generatePDF() {
+            // 1. Prepare content in the hidden div
+            buildPdfContent();
+
+            const pdfContentElement = document.getElementById('pdf-content');
+
+            // 2. Temporarily show the content for html2canvas to render correctly
+            pdfContentElement.classList.remove('hidden');
+
+            // 3. Convert HTML to Canvas
+            try {
+                const canvas = await html2canvas(pdfContentElement, {
+                    scale: 2, // Improve resolution
+                    useCORS: true,
+                    logging: false,
+                    scrollX: 0,
+                    scrollY: 0,
+                    windowWidth: pdfContentElement.scrollWidth,
+                    windowHeight: pdfContentElement.scrollHeight
+                });
+
+                // 4. Initialize jsPDF (A4 dimensions: 210mm x 297mm)
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgData = canvas.toDataURL('image/png');
+                const imgWidth = 210; // A4 width in mm
+                const pageHeight = 297; // A4 height in mm
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                // 5. Add image data to PDF, handling multiple pages if needed
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+
+                // 6. Download the PDF
+                pdf.save(`${state.tripTitle.replace(/\s/g, '_') || 'itinerary'}_${state.departureDate}.pdf`);
+
+            } catch (error) {
+                console.error("Error generating PDF:", error);
+                // Simple error message for the user
+                alert("An error occurred during PDF generation. Please check the console for details.");
+            } finally {
+                // 7. Hide the content div again
+                pdfContentElement.classList.add('hidden');
+            }
+        }
+
+        // --- Initial Load ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Populate initial input fields from state
+            document.getElementById('tripTitle').value = state.tripTitle;
+            document.getElementById('totalDuration').value = state.totalDuration;
+            document.getElementById('numTravelers').value = state.numTravelers;
+            document.getElementById('departureDate').value = state.departureDate;
+            // Set initial state for other inputs, though many start empty
+            document.getElementById('inclusions').value = state.inclusions;
+            document.getElementById('exclusions').value = state.exclusions;
+
+
+            // Render dynamic sections
+            renderDailyItinerary();
+            renderInstallments();
+            renderHotels();
+
+            // Initialize Lucide Icons
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>
